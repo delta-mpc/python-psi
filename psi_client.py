@@ -22,10 +22,11 @@ if __name__ == '__main__':
         client = Client(pair, words)
         logging.info("start prepare")
         client.prepare()
-        pair.barrier()
         logging.info("finish prepare")
 
-        res = client.compare()
+        logging.info("start intersection")
+        res = client.intersect()
+        logging.info("finish intersection")
         print(sorted([int.from_bytes(val, "big") for val in res]))
 
         pair.barrier()

@@ -16,16 +16,17 @@ if __name__ == '__main__':
     local = Address(host, local_port)
     peer = Address(host, peer_port)
 
-    words = [i.to_bytes(4, "big") for i in range(500, 1500)]
+    words = [i.to_bytes(4, "big") for i in range(500, 1000)]
 
     with make_pair(local, peer) as pair:
         server = Server(pair, words)
         logging.info("start prepare")
         server.prepare()
-        pair.barrier()
         logging.info("finish prepare")
 
-        res = server.compare()
+        logging.info("start intersection")
+        res = server.intersect()
+        logging.info("finish intersection")
         print(sorted([int.from_bytes(val, "big") for val in res]))
 
         pair.barrier()

@@ -38,7 +38,7 @@ class Client(object):
     def prepare(self):
         self.oprf_client.prepare()
 
-    def compare(self) -> List[bytes]:
+    def intersect(self) -> List[bytes]:
         peer_tables = [{}, {}, {}]
         peer_stash = {}
         for table in peer_tables:

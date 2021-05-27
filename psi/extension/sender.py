@@ -6,7 +6,7 @@ import numpy as np
 from .. import base
 from ..cipher import shake
 from ..pair import Pair
-from ..serialize import arr_to_bytes, bytes_to_arr, int_to_bytes
+from ..serialize import bit_arr_to_bytes, bytes_to_bit_arr, int_to_bytes
 from ..utils import pack, rand_binary_arr
 
 
@@ -56,8 +56,9 @@ class Sender(object):
                 else:
                     assert m == len(q_col), f"base OT message length should be all the same, but the round {i} is not"
                 q_cols.append(q_col)
+        self._pair.barrier()
 
-        self._q = np.vstack([bytes_to_arr(col) for col in q_cols]).T
+        self._q = np.vstack([bytes_to_bit_arr(col) for col in q_cols]).T
 
     @property
     def max_count(self) -> int:
@@ -74,8 +75,8 @@ class Sender(object):
             raise ValueError("The sender is not available now. "
                              "The sender may be not prepared or have used all ot keys")
 
-        key0 = int_to_bytes(self._index) + arr_to_bytes(self._q[self._index, :])
-        key1 = int_to_bytes(self._index) + arr_to_bytes(self._q[self._index, :] ^ self._s)
+        key0 = int_to_bytes(self._index) + bit_arr_to_bytes(self._q[self._index, :])
+        key1 = int_to_bytes(self._index) + bit_arr_to_bytes(self._q[self._index, :] ^ self._s)
 
         cipher_m0 = shake.encrypt(key0, m0)
         cipher_m1 = shake.encrypt(key1, m1)

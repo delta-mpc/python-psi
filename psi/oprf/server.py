@@ -1,12 +1,10 @@
-import secrets
-
 import numpy as np
 from Crypto.Hash import SHAKE256, SHA256
 
 from .. import base
 from ..extension import Receiver
 from ..pair import Pair
-from ..serialize import bytes_to_arr, int_to_bytes, arr_to_bytes
+from ..serialize import bytes_to_bit_arr, int_to_bytes, bit_arr_to_bytes
 from ..utils import rand_binary_arr
 
 
@@ -51,8 +49,9 @@ class Server(object):
                 else:
                     assert m == len(q_col), f"base OT message length should be all the same, but the round {i} is not"
                 q_cols.append(q_col)
+        self._pair.barrier()
 
-        self._q = np.vstack([bytes_to_arr(col) for col in q_cols]).T
+        self._q = np.vstack([bytes_to_bit_arr(col) for col in q_cols]).T
 
     def _encode(self, data: bytes) -> bytes:
         shake = SHAKE256.new(data)
@@ -66,12 +65,15 @@ class Server(object):
         else:
             return self._q.shape[0]
 
+    def _eval_op(self, i: int, enc_data: np.ndarray):
+        qi = self._q[i, :]
+        return qi ^ (self._s & enc_data)
+
     def eval(self, i: int, data: bytes) -> bytes:
         if i >= self.max_count:
             raise IndexError(f"i is greater than oprf instance count {self.max_count}")
-        qi = self._q[i, :]
         enc_data = self._encode(data)
-        enc_data_arr = bytes_to_arr(int_to_bytes(self._codewords) + enc_data)
+        enc_data_arr = bytes_to_bit_arr(int_to_bytes(self._codewords) + enc_data)
 
-        res = qi ^ (self._s & enc_data_arr)
-        return SHA256.new(arr_to_bytes(res)[4:]).digest()
+        res = self._eval_op(i, enc_data_arr)
+        return SHA256.new(bit_arr_to_bytes(res)[4:]).digest()

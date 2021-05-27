@@ -2,10 +2,10 @@ import numpy as np
 
 from .int import int_to_bytes, bytes_to_int
 
-__all__ = ["arr_to_bytes", "bytes_to_arr"]
+__all__ = ["bit_arr_to_bytes", "bytes_to_bit_arr"]
 
 
-def arr_to_bytes(arr: np.ndarray) -> bytes:
+def bit_arr_to_bytes(arr: np.ndarray) -> bytes:
     """
     :param arr: 1-d uint8 numpy array
     :return: bytes, one element in arr maps to one bit in output bytes, padding in the left
@@ -18,7 +18,7 @@ def arr_to_bytes(arr: np.ndarray) -> bytes:
     return int_to_bytes(n) + bs
 
 
-def bytes_to_arr(data: bytes) -> np.ndarray:
+def bytes_to_bit_arr(data: bytes) -> np.ndarray:
     """
     :param data: bytes, first 4 bytes is array length, and the remaining is array data
     :return:

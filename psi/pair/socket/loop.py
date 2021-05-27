@@ -27,11 +27,6 @@ class LoopConnectState(IntEnum):
     READY = 4
 
 
-class LoopMainState(IntEnum):
-    READ = 0
-    WRITE = 1
-
-
 class LoopThread(threading.Thread):
     def __init__(self, local: AddrType, peer: AddrType):
         super(LoopThread, self).__init__(daemon=True)
@@ -98,55 +93,55 @@ class LoopThread(threading.Thread):
         self._sel.register(client_sock, selectors.EVENT_WRITE, data="client")
 
         ts = int(time.time() * 1000)
-        state = LoopConnectState.INIT
+        connect_state = LoopConnectState.INIT
 
         peer_sock: Optional[socket.socket] = None
 
         try:
             # connect loop
-            while not self._stop_event.is_set() and state != LoopConnectState.READY:
+            while not self._stop_event.is_set() and connect_state != LoopConnectState.READY:
                 events = self._sel.select(0)
                 for key, event in events:
                     if key.data == "server" and (event & selectors.EVENT_READ) \
-                            and state in [LoopConnectState.INIT, LoopConnectState.SERVER_SUCCESS,
+                            and connect_state in [LoopConnectState.INIT, LoopConnectState.SERVER_SUCCESS,
                                           LoopConnectState.CLIENT_SUCCESS]:
                         sock, addr = server_sock.accept()
-                        if addr[0] == self._peer[0] and (state != 1 or addr[1] == self._peer[1]):
+                        if addr[0] == self._peer[0] and (connect_state != 1 or addr[1] == self._peer[1]):
                             sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
                             sock.setblocking(False)
-                            if state == LoopConnectState.INIT:
+                            if connect_state == LoopConnectState.INIT:
                                 self._sel.register(sock, selectors.EVENT_READ, data="peer")
                                 peer_sock = sock
-                                state = LoopConnectState.SERVER_SUCCESS
-                            elif state == LoopConnectState.SERVER_SUCCESS:
+                                connect_state = LoopConnectState.SERVER_SUCCESS
+                            elif connect_state == LoopConnectState.SERVER_SUCCESS:
                                 self._sel.register(sock, selectors.EVENT_READ | selectors.EVENT_WRITE, data="pair")
                                 self._sock = sock
                                 self._mode = "server"
-                                state = LoopConnectState.READY
+                                connect_state = LoopConnectState.READY
                                 server_sock.close()
                                 self._sel.unregister(server_sock)
                                 peer_sock.close()
                                 self._sel.unregister(peer_sock)
-                            elif state == LoopConnectState.CLIENT_SUCCESS:
+                            elif connect_state == LoopConnectState.CLIENT_SUCCESS:
                                 self._sel.register(sock, selectors.EVENT_READ, data="peer")
                                 peer_sock = sock
-                                state = LoopConnectState.BOTH_SUCCESS
+                                connect_state = LoopConnectState.BOTH_SUCCESS
                     elif key.data == "client" and (event & selectors.EVENT_WRITE) \
-                            and state in [LoopConnectState.INIT, LoopConnectState.SERVER_SUCCESS,
+                            and connect_state in [LoopConnectState.INIT, LoopConnectState.SERVER_SUCCESS,
                                           LoopConnectState.CLIENT_SUCCESS, LoopConnectState.READY]:
-                        if state in [LoopConnectState.INIT, LoopConnectState.SERVER_SUCCESS]:
+                        if connect_state in [LoopConnectState.INIT, LoopConnectState.SERVER_SUCCESS]:
                             err = client_sock.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR)
                             if err == 0:
-                                if state == LoopConnectState.INIT:
-                                    state = LoopConnectState.CLIENT_SUCCESS
-                                elif state == LoopConnectState.SERVER_SUCCESS:
-                                    state = LoopConnectState.BOTH_SUCCESS
+                                if connect_state == LoopConnectState.INIT:
+                                    connect_state = LoopConnectState.CLIENT_SUCCESS
+                                elif connect_state == LoopConnectState.SERVER_SUCCESS:
+                                    connect_state = LoopConnectState.BOTH_SUCCESS
                             elif errno.errorcode[err] == "EINPROGRESS":
                                 continue
                             else:
                                 self._sel.unregister(client_sock)
                                 client_sock.close()
-                        elif state == LoopConnectState.CLIENT_SUCCESS:
+                        elif connect_state == LoopConnectState.CLIENT_SUCCESS:
                             client_sock.close()
                             self._sel.unregister(client_sock)
                             server_sock.close()
@@ -167,23 +162,23 @@ class LoopThread(threading.Thread):
                             client_sock.close()
                             self._sel.unregister(client_sock)
                     elif key.data == "peer" and (
-                            event & selectors.EVENT_READ) and state == LoopConnectState.BOTH_SUCCESS:
+                            event & selectors.EVENT_READ) and connect_state == LoopConnectState.BOTH_SUCCESS:
                         data = peer_sock.recv()
                         peer_ts = int(data.decode("utf-8"))
                         if ts < peer_ts:
-                            state = LoopConnectState.SERVER_SUCCESS
+                            connect_state = LoopConnectState.SERVER_SUCCESS
                         else:
-                            state = LoopConnectState.CLIENT_SUCCESS
+                            connect_state = LoopConnectState.CLIENT_SUCCESS
                         key.fileobj.close()
                         self._sel.unregister(key.fileobj)
                     elif key.data == "pair" and (
-                            event & selectors.EVENT_WRITE) and state == LoopConnectState.CLIENT_SUCCESS:
+                            event & selectors.EVENT_WRITE) and connect_state == LoopConnectState.CLIENT_SUCCESS:
                         err = key.fileobj.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR)
                         if err == 0:
                             self._sel.modify(key.fileobj, selectors.EVENT_READ | selectors.EVENT_WRITE, data="pair")
                             self._sock = key.fileobj
                             self._mode = "client"
-                            state = LoopConnectState.READY
+                            connect_state = LoopConnectState.READY
                         elif errno.errorcode[err] == "EINPROGRESS":
                             continue
                         else:

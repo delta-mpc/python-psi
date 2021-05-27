@@ -5,7 +5,7 @@ import numpy as np
 from .. import base
 from ..cipher import shake
 from ..pair import Pair
-from ..serialize import arr_to_bytes, int_to_bytes
+from ..serialize import bit_arr_to_bytes, int_to_bytes
 from ..utils import unpack, rand_binary_arr
 
 
@@ -32,8 +32,8 @@ class Receiver(object):
         u = (self._t.T ^ self._r).T
         if self._codewords == 128:
             for i in range(self._codewords):
-                t_col_bytes = arr_to_bytes(self._t[:, i])
-                u_col_bytes = arr_to_bytes(u[:, i])
+                t_col_bytes = bit_arr_to_bytes(self._t[:, i])
+                u_col_bytes = bit_arr_to_bytes(u[:, i])
                 base.send(self._pair, t_col_bytes, u_col_bytes)
         else:
             from psi.extension import Sender
@@ -41,9 +41,10 @@ class Receiver(object):
             sender = Sender(self._pair, 128)
             sender.prepare()
             for i in range(self._codewords):
-                t_col_bytes = arr_to_bytes(self._t[:, i])
-                u_col_bytes = arr_to_bytes(u[:, i])
+                t_col_bytes = bit_arr_to_bytes(self._t[:, i])
+                u_col_bytes = bit_arr_to_bytes(u[:, i])
                 sender.send(t_col_bytes, u_col_bytes)
+        self._pair.barrier()
 
     def is_available(self):
         return self._t is not None and self._index < self._r.size
@@ -55,7 +56,7 @@ class Receiver(object):
         return self._r.shape[0]
 
     def recv(self):
-        key = int_to_bytes(self._index) + arr_to_bytes(self._t[self._index, :])
+        key = int_to_bytes(self._index) + bit_arr_to_bytes(self._t[self._index, :])
 
         cipher_m = unpack(self._pair.recv())[self._r[self._index]]
         res = shake.decrypt(key, cipher_m)

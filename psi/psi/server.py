@@ -20,7 +20,7 @@ class Server(object):
     def prepare(self):
         self.oprf_server.prepare()
 
-    def compare(self):
+    def intersect(self):
         n = self.oprf_server.max_count - self.s
         for i in range(3):
             words = random.sample(self.words, len(self.words))
