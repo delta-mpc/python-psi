@@ -5,9 +5,9 @@ import selectors
 import socket
 import threading
 import time
-from collections import defaultdict
+from collections import defaultdict, deque
 from enum import IntEnum
-from typing import Optional, Union, Tuple, List, Dict
+from typing import Optional, Union, Tuple, DefaultDict, Deque
 
 from .message import Message
 from .pipe import make_pipe, Pipe
@@ -19,12 +19,17 @@ AddrType = Union[Address, Tuple[str, int]]
 _logger = logging.getLogger()
 
 
-class LoopState(IntEnum):
+class LoopConnectState(IntEnum):
     INIT = 0
     SERVER_SUCCESS = 1
     CLIENT_SUCCESS = 2
     BOTH_SUCCESS = 3
     READY = 4
+
+
+class LoopMainState(IntEnum):
+    READ = 0
+    WRITE = 1
 
 
 class LoopThread(threading.Thread):
@@ -41,12 +46,11 @@ class LoopThread(threading.Thread):
         self._connect_event = threading.Event()
 
         self._register_count = 0
-        self._registry: Dict[int, Pipe] = {}
         self._id_counter = 0
         self._register_lock = threading.Lock()
 
-        self._send_buffer: List[Message] = []
-        self._recv_buffer: Dict[int, List[Message]] = defaultdict(list)
+        self._send_buffer: Deque[Tuple[Message, Pipe]] = deque()
+        self._recv_buffer: DefaultDict[int, Deque[Message]] = defaultdict(deque)
 
     @property
     def local_addr(self):
@@ -63,85 +67,16 @@ class LoopThread(threading.Thread):
                 self._id_counter += 1
 
                 local, remote = make_pipe()
-                self._registry[local_id] = local
+                self._sel.register(local, selectors.EVENT_READ | selectors.EVENT_WRITE, data=local_id)
             return local_id, remote
         raise TimeoutError(f"unable to make connection with peer after {timeout} seconds")
 
     def unregister(self, local_id: int):
-        with self._register_lock:
-            self._registry.pop(local_id)
-
-    def _fetch(self):
-        with self._register_lock:
-            for pipe in self._registry.values():
-                n = 50
-                while n > 0:
-                    try:
-                        msg = pipe.recv(block=False)
-                        self._send_buffer.append(msg)
-                        n -= 1
-                        _logger.debug(f"fetch msg: {msg}")
-                    except queue.Empty:
-                        break
-
-    def _dispatch(self):
-        with self._register_lock:
-            for i, pipe in self._registry.items():
-                buffer = self._recv_buffer[i]
-                if len(buffer) > 0:
-                    for msg in buffer:
-                        pipe.send(msg, block=False)
-                        _logger.debug(f"dispatch msg: {msg}")
-                    self._recv_buffer[i] = []
-
-    def _send(self):
-        if len(self._send_buffer) > 0:
-            _logger.debug(f"send buffer: {self._send_buffer}")
-            words = []
-            ids = []
-            for msg in self._send_buffer:
-                _logger.debug(f"send msg: {msg}")
-                data = msg.encode()
-                words.append(int_to_bytes(len(data)) + data)
-                ids.append(msg.id)
-
-            frame = b"".join(words)
-            self._sock.sendall(frame)
-            for i in ids:
-                pipe = self._registry[i]
-                pipe.task_done()
-            self._send_buffer = []
-
-    def _recv(self):
-        if len(self._registry) == 0:
-            return
-
-        data_arr = []
-        while True:
-            try:
-                data = self._sock.recv(4096)
-                if not data:
-                    break
-                data_arr.append(data)
-            except BlockingIOError as e:
-                if errno.errorcode[e.errno] == "EAGAIN":
-                    break
-                raise e
-
-        # parse
-        if len(data_arr) > 0:
-            data = b"".join(data_arr)
-            n = 0
-            length = 0
-            while n < len(data):
-                if length == 0:
-                    length = bytes_to_int(data[n: n + 4])
-                    n += 4
-                msg = Message.decode(data[n: n + length])
-                n += length
-                self._recv_buffer[msg.id].append(msg)
-                _logger.debug(f"recv msg: {msg}")
-                length = 0
+        pipe = None
+        for key in self._sel.get_map().values():
+            if key.data == local_id:
+                pipe = key.fileobj
+        self._sel.unregister(pipe)
 
     def run(self):
         server_sock = socket.socket(family=socket.AF_INET, type=socket.SOCK_STREAM)
@@ -163,48 +98,55 @@ class LoopThread(threading.Thread):
         self._sel.register(client_sock, selectors.EVENT_WRITE, data="client")
 
         ts = int(time.time() * 1000)
-        state = LoopState.INIT
+        state = LoopConnectState.INIT
+
+        peer_sock: Optional[socket.socket] = None
 
         try:
             # connect loop
-            while not self._stop_event.is_set() and state != LoopState.READY:
+            while not self._stop_event.is_set() and state != LoopConnectState.READY:
                 events = self._sel.select(0)
                 for key, event in events:
                     if key.data == "server" and (event & selectors.EVENT_READ) \
-                            and state in [LoopState.INIT, LoopState.SERVER_SUCCESS, LoopState.CLIENT_SUCCESS]:
+                            and state in [LoopConnectState.INIT, LoopConnectState.SERVER_SUCCESS,
+                                          LoopConnectState.CLIENT_SUCCESS]:
                         sock, addr = server_sock.accept()
                         if addr[0] == self._peer[0] and (state != 1 or addr[1] == self._peer[1]):
                             sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
                             sock.setblocking(False)
-                            if state == LoopState.INIT:
+                            if state == LoopConnectState.INIT:
                                 self._sel.register(sock, selectors.EVENT_READ, data="peer")
-                                state = LoopState.SERVER_SUCCESS
-                            elif state == LoopState.SERVER_SUCCESS:
+                                peer_sock = sock
+                                state = LoopConnectState.SERVER_SUCCESS
+                            elif state == LoopConnectState.SERVER_SUCCESS:
                                 self._sel.register(sock, selectors.EVENT_READ | selectors.EVENT_WRITE, data="pair")
                                 self._sock = sock
                                 self._mode = "server"
-                                state = LoopState.READY
+                                state = LoopConnectState.READY
                                 server_sock.close()
                                 self._sel.unregister(server_sock)
-                            elif state == LoopState.CLIENT_SUCCESS:
+                                peer_sock.close()
+                                self._sel.unregister(peer_sock)
+                            elif state == LoopConnectState.CLIENT_SUCCESS:
                                 self._sel.register(sock, selectors.EVENT_READ, data="peer")
-                                state = LoopState.BOTH_SUCCESS
+                                peer_sock = sock
+                                state = LoopConnectState.BOTH_SUCCESS
                     elif key.data == "client" and (event & selectors.EVENT_WRITE) \
-                            and state in [LoopState.INIT, LoopState.SERVER_SUCCESS,
-                                          LoopState.CLIENT_SUCCESS, LoopState.READY]:
-                        if state in [LoopState.INIT, LoopState.SERVER_SUCCESS]:
+                            and state in [LoopConnectState.INIT, LoopConnectState.SERVER_SUCCESS,
+                                          LoopConnectState.CLIENT_SUCCESS, LoopConnectState.READY]:
+                        if state in [LoopConnectState.INIT, LoopConnectState.SERVER_SUCCESS]:
                             err = client_sock.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR)
                             if err == 0:
-                                if state == LoopState.INIT:
-                                    state = LoopState.CLIENT_SUCCESS
-                                elif state == LoopState.SERVER_SUCCESS:
-                                    state = LoopState.BOTH_SUCCESS
+                                if state == LoopConnectState.INIT:
+                                    state = LoopConnectState.CLIENT_SUCCESS
+                                elif state == LoopConnectState.SERVER_SUCCESS:
+                                    state = LoopConnectState.BOTH_SUCCESS
                             elif errno.errorcode[err] == "EINPROGRESS":
                                 continue
                             else:
                                 self._sel.unregister(client_sock)
                                 client_sock.close()
-                        elif state == LoopState.CLIENT_SUCCESS:
+                        elif state == LoopConnectState.CLIENT_SUCCESS:
                             client_sock.close()
                             self._sel.unregister(client_sock)
                             server_sock.close()
@@ -224,22 +166,24 @@ class LoopThread(threading.Thread):
                             client_sock.sendall(str(ts).encode("utf-8"))
                             client_sock.close()
                             self._sel.unregister(client_sock)
-                    elif key.data == "peer" and (event & selectors.EVENT_READ) and state == LoopState.BOTH_SUCCESS:
-                        data = key.fileobj.recv()
+                    elif key.data == "peer" and (
+                            event & selectors.EVENT_READ) and state == LoopConnectState.BOTH_SUCCESS:
+                        data = peer_sock.recv()
                         peer_ts = int(data.decode("utf-8"))
                         if ts < peer_ts:
-                            state = LoopState.SERVER_SUCCESS
+                            state = LoopConnectState.SERVER_SUCCESS
                         else:
-                            state = LoopState.CLIENT_SUCCESS
+                            state = LoopConnectState.CLIENT_SUCCESS
                         key.fileobj.close()
                         self._sel.unregister(key.fileobj)
-                    elif key.data == "pair" and (event & selectors.EVENT_WRITE) and state == LoopState.CLIENT_SUCCESS:
+                    elif key.data == "pair" and (
+                            event & selectors.EVENT_WRITE) and state == LoopConnectState.CLIENT_SUCCESS:
                         err = key.fileobj.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR)
                         if err == 0:
                             self._sel.modify(key.fileobj, selectors.EVENT_READ | selectors.EVENT_WRITE, data="pair")
                             self._sock = key.fileobj
                             self._mode = "client"
-                            state = LoopState.READY
+                            state = LoopConnectState.READY
                         elif errno.errorcode[err] == "EINPROGRESS":
                             continue
                         else:
@@ -249,16 +193,73 @@ class LoopThread(threading.Thread):
             self._connect_event.set()
             # main loop
             while not self._stop_event.is_set():
-                # fetch msg from local pairs
-                self._fetch()
                 events = self._sel.select(0)
                 for key, event in events:
-                    if key.data == "pair" and (event & selectors.EVENT_WRITE):
-                        self._send()
+                    if isinstance(key.data, int) and (event & selectors.EVENT_READ):
+                        # fetch data from local pair
+                        pipe: Pipe = key.fileobj
+                        try:
+                            msg = pipe.recv(block=False)
+                            self._send_buffer.append((msg, pipe))
+                            _logger.debug(f"fetch msg {msg}")
+                        except queue.Empty:
+                            pass
+                    if isinstance(key.data, int) and (event & selectors.EVENT_WRITE):
+                        local_id: int = key.data
+                        pipe: Pipe = key.fileobj
+                        buffer = self._recv_buffer[local_id]
+                        try:
+                            msg = buffer.popleft()
+                            pipe.send(msg, block=False)
+                            _logger.debug(f"dispatch msg {msg}")
+                        except IndexError:
+                            pass
+                    if len(self._send_buffer) > 0 and key.data == "pair" and (event & selectors.EVENT_WRITE):
+                        _logger.debug(f"send buffer: {self._send_buffer}")
+                        words = []
+                        pipes = []
+                        while True:
+                            try:
+                                msg, pipe = self._send_buffer.popleft()
+                                word = msg.encode()
+                                words.append(int_to_bytes(len(word)) + word)
+                                pipes.append(pipe)
+                            except IndexError:
+                                break
+                        if len(words) > 0:
+                            data = b"".join(words)
+                            self._sock.sendall(data)
+                            _logger.debug(f"send data {data}")
+                            for pipe in pipes:
+                                pipe.task_done()
                     if key.data == "pair" and (event & selectors.EVENT_READ):
-                        self._recv()
-                # dispatch msg to local pairs
-                self._dispatch()
+                        data_arr = []
+                        while True:
+                            try:
+                                data = self._sock.recv(4096)
+                                if not data:
+                                    break
+                                data_arr.append(data)
+                            except BlockingIOError as e:
+                                if errno.errorcode[e.errno] == "EAGAIN":
+                                    break
+                                raise e
+
+                        # parse
+                        if len(data_arr) > 0:
+                            data = b"".join(data_arr)
+                            n = 0
+                            length = 0
+                            while n < len(data):
+                                if length == 0:
+                                    length = bytes_to_int(data[n: n + 4])
+                                    n += 4
+                                msg = Message.decode(data[n: n + length])
+                                n += length
+                                self._recv_buffer[msg.id].append(msg)
+                                _logger.debug(f"recv msg: {msg}")
+                                length = 0
+
         finally:
             if self._sock is not None:
                 self._sock.close()
