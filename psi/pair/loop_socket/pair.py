@@ -7,7 +7,7 @@ from ..pair import Pair, Address
 AddrType = Union[Address, Tuple[str, int]]
 
 
-class SocketPair(Pair):
+class LoopSocketPair(Pair):
     def __init__(self, local: AddrType, peer: AddrType, timeout: float):
         if not isinstance(local, Address):
             local = Address(*local)

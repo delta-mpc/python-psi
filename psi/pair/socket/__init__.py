@@ -1,1 +1,1 @@
-from .socket import SocketPair
+from .pair import SocketPair
