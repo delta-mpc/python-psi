@@ -36,7 +36,7 @@ class Server(object):
             for word in words:
                 val = self.oprf_server.eval(n + i, word)
                 _logger.debug(f"table position {n + i}, "
-                             f"word {int.from_bytes(word, 'big')}, val {val.hex()}")
+                              f"word {int.from_bytes(word, 'big')}, val {val.hex()}")
                 self.pair.send(val)
         self.pair.send(b"end")
 
