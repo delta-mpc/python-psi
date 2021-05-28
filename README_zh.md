@@ -7,6 +7,7 @@ Delta PSI是一个隐私集合求交（private set intersection）库，
 [KKRT16](https://eprint.iacr.org/2016/799) 
 隐私集合求交协议实现。
 KKRT16基于不经意传输（OT）和布谷鸟哈希（cuckoo hashing）来实现隐私集合求交。
+协议具体的原理介绍，可以参考[知乎文章](https://zhuanlan.zhihu.com/p/367477035) 。
 
 ## 安装 
 
