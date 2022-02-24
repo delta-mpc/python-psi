@@ -13,27 +13,54 @@ based on cuckoo hashing and OT (oblivious transfer).
 Clone this repository, and run command
 
 ```
-python setup.py install
+pip install .
 ```
 
-## Usage
+## Command
 
-Run these two python scripts
-
-```
-python psi_server.py
-```
-
-and 
+Initialize config file:
 
 ```
-python psi_client.py
+psi_run init
 ```
 
-you can see the intersection set output in the terminal.
+This command will generate a config file in location `config/config.yaml`
 
-You can change the `words` variable in psi_server.py and psi_client.py 
-to change the sets to intersect.
+
+Start PSI server:
+
+```
+PSI_CONFIG=<CONFIG> psi_run server <address>
+```
+
+The `<CONFIG>` means server config file location, and `<address>` means PSI client address.
+
+
+Start PSI client:
+
+```
+PSI_CONFIG=<CONFIG> psi_run client <address>
+```
+
+The `<CONFIG>` means client config file location, and `<address>` means PSI server address.
+
+## DEMO
+
+Run these two commands:
+
+```
+PSI_CONFIG=config/server.config.yaml psi_run server 127.0.0.1:2345
+```
+
+```
+PSI_CONFIG=config/client.config.yaml psi_run client 127.0.0.1:1234
+```
+
+to start the demo.
+
+For PSI server, the config file is in `config/server.config.yaml`, the input data file is in `server_data.txt` and the output result file is in `server_result.txt`.
+
+For PSI client, the config file is in `config/client.config.yaml`, the input data file is in `client_data.txt` and the output result file is in `client_result.txt`.
 
 ## Note
 

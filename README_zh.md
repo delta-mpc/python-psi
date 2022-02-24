@@ -14,27 +14,52 @@ KKRT16基于不经意传输（OT）和布谷鸟哈希（cuckoo hashing）来实�
 克隆本仓库，运行命令
 
 ```
-python setup.py install
+pip install .
 ```
 
-## 使用
+## 命令
 
-运行以下两个脚本
-
-```
-python psi_server.py
-```
-
-
+初始化配置文件：
 
 ```
-python psi_client.py
+psi_run init
 ```
 
-两个脚本会输出求得的交集。
+运行此命令后，可以看到新建的配置文件`config/config.yaml`
 
-脚本`psi_server.py`和`psi_client.py`中的`words`字段代表双方需要求交集的集合，
-可以修改`words`字段，改变要求交集的集合。
+启动PSI服务端：
+
+```
+PSI_CONFIG=<CONFIG> psi_run server <address>
+```
+
+其中，`<CONFIG>`为配置文件位置，`<address>`为PSI客户端的地址。
+
+启动PSI客户端：
+
+```
+PSI_CONFIG=<CONFIG> psi_run client <address>
+```
+
+其中，`<CONFIG>`为配置文件位置，`<address>`为PSI服务端的地址。
+
+
+## DEMO
+
+分别运行以下两条命令：
+
+```
+PSI_CONFIG=config/server.config.yaml psi_run server 127.0.0.1:2345
+```
+
+```
+PSI_CONFIG=config/client.config.yaml psi_run client 127.0.0.1:1234
+```
+
+以启动demo
+
+其中，PSI服务端的配置文件位于`config/server.config.yaml`，输入数据位于`server_data.txt`，输出结果位于`server_result.txt`；
+PSI客户端的配置文件位于`config/client.confg.yaml`，输入数据位于`client_data.txt`，输出结果位于`client_result.txt`。
 
 ## 注
 
