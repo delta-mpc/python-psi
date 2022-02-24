@@ -43,7 +43,9 @@ class _ServerThread(threading.Thread):
         self._stop_event.set()
         self._sock.close()
 
-    def get_sock_addr(self, block: bool = True, timeout: Optional[float] = None) -> socket.socket:
+    def get_sock_addr(
+        self, block: bool = True, timeout: Optional[float] = None
+    ) -> Tuple[socket.socket, socket.socket]:
         return self._res_queue.get(block=block, timeout=timeout)
 
 
@@ -84,7 +86,9 @@ class SocketPair(Pair):
                 server_thread.join()
                 client_sock.close()
 
-                peer_sock = socket.socket(family=socket.AF_INET, type=socket.SOCK_STREAM)
+                peer_sock = socket.socket(
+                    family=socket.AF_INET, type=socket.SOCK_STREAM
+                )
                 peer_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
                 peer_sock.bind(self._local)
                 peer_sock.connect(self._peer)

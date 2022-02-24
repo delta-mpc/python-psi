@@ -9,6 +9,7 @@ from ..pair import Pair
 
 _logger = logging.getLogger()
 
+
 class Server(object):
     def __init__(self, pair: Pair, words: List[bytes]):
         self.s = 5
@@ -27,7 +28,9 @@ class Server(object):
             for word in words:
                 h = position_hash(i + 1, word, n)
                 val = self.oprf_server.eval(h, word + bytes([i + 1]))
-                _logger.debug(f"hash index {i + 1}, table position {h}, word {int.from_bytes(word, 'big')}, val {val.hex()}")
+                _logger.debug(
+                    f"hash index {i + 1}, table position {h}, word {int.from_bytes(word, 'big')}, val {val.hex()}"
+                )
                 self.pair.send(val)
             self.pair.send(b"end")
 
@@ -35,12 +38,14 @@ class Server(object):
             words = random.sample(self.words, len(self.words))
             for word in words:
                 val = self.oprf_server.eval(n + i, word)
-                _logger.debug(f"table position {n + i}, "
-                              f"word {int.from_bytes(word, 'big')}, val {val.hex()}")
+                _logger.debug(
+                    f"table position {n + i}, "
+                    f"word {int.from_bytes(word, 'big')}, val {val.hex()}"
+                )
                 self.pair.send(val)
         self.pair.send(b"end")
 
-        res = []
+        res: List[bytes] = []
         while True:
             word = self.pair.recv()
             if word == b"end":

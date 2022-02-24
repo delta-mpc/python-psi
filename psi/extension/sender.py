@@ -1,4 +1,3 @@
-import secrets
 from typing import Optional
 
 import numpy as np
@@ -20,8 +19,10 @@ class Sender(object):
     def __init__(self, pair: Pair, codewords: int = 128):
         self._pair = pair
         if codewords < 128:
-            raise ValueError(f"codewords {codewords} is too small,"
-                             f" it should be greater equal than 128 to ensure security")
+            raise ValueError(
+                f"codewords {codewords} is too small,"
+                f" it should be greater equal than 128 to ensure security"
+            )
         self._codewords = codewords
 
     def prepare(self):
@@ -39,7 +40,9 @@ class Sender(object):
                 if m == 0:
                     m = len(q_col)
                 else:
-                    assert m == len(q_col), f"base OT message length should be all the same, but the round {i} is not"
+                    assert m == len(
+                        q_col
+                    ), f"base OT message length should be all the same, but the round {i} is not"
                 q_cols.append(q_col)
 
         else:
@@ -54,7 +57,9 @@ class Sender(object):
                 if m == 0:
                     m = len(q_col)
                 else:
-                    assert m == len(q_col), f"base OT message length should be all the same, but the round {i} is not"
+                    assert m == len(
+                        q_col
+                    ), f"base OT message length should be all the same, but the round {i} is not"
                 q_cols.append(q_col)
         self._pair.barrier()
 
@@ -72,11 +77,15 @@ class Sender(object):
 
     def send(self, m0: bytes, m1: bytes):
         if not self.is_available():
-            raise ValueError("The sender is not available now. "
-                             "The sender may be not prepared or have used all ot keys")
+            raise ValueError(
+                "The sender is not available now. "
+                "The sender may be not prepared or have used all ot keys"
+            )
 
         key0 = int_to_bytes(self._index) + bit_arr_to_bytes(self._q[self._index, :])
-        key1 = int_to_bytes(self._index) + bit_arr_to_bytes(self._q[self._index, :] ^ self._s)
+        key1 = int_to_bytes(self._index) + bit_arr_to_bytes(
+            self._q[self._index, :] ^ self._s
+        )
 
         cipher_m0 = shake.encrypt(key0, m0)
         cipher_m1 = shake.encrypt(key1, m1)

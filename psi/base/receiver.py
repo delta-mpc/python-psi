@@ -19,7 +19,7 @@ def recv(pair: Pair, b: int) -> bytes:
     # choose point and pk
     if b == 1:
         point = pk.pointQ + ak.pointQ
-        pk = ECC.EccKey(curve=curve, point=point, d=None)
+        pk = ECC.EccKey(curve=curve, point=point)
     # send chosen public key
     pair.send(key_to_bytes(pk))
 

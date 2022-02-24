@@ -20,8 +20,10 @@ class Receiver(object):
         self._pair = pair
         self._r = np.array(r, dtype=np.uint8)
         if codewords < 128:
-            raise ValueError(f"codewords {codewords} is too small,"
-                             f" it should be greater equal than 128 to ensure security")
+            raise ValueError(
+                f"codewords {codewords} is too small,"
+                f" it should be greater equal than 128 to ensure security"
+            )
         self._codewords = codewords
 
     def prepare(self):

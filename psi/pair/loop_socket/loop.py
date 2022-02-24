@@ -62,9 +62,13 @@ class LoopThread(threading.Thread):
                 self._id_counter += 1
 
                 local, remote = make_pipe()
-                self._sel.register(local, selectors.EVENT_READ | selectors.EVENT_WRITE, data=local_id)
+                self._sel.register(
+                    local, selectors.EVENT_READ | selectors.EVENT_WRITE, data=local_id
+                )
             return local_id, remote
-        raise TimeoutError(f"unable to make connection with peer after {timeout} seconds")
+        raise TimeoutError(
+            f"unable to make connection with peer after {timeout} seconds"
+        )
 
     def unregister(self, local_id: int):
         pipe = None
@@ -99,22 +103,40 @@ class LoopThread(threading.Thread):
 
         try:
             # connect loop
-            while not self._stop_event.is_set() and connect_state != LoopConnectState.READY:
+            while (
+                not self._stop_event.is_set()
+                and connect_state != LoopConnectState.READY
+            ):
                 events = self._sel.select(0)
                 for key, event in events:
-                    if key.data == "server" and (event & selectors.EVENT_READ) \
-                            and connect_state in [LoopConnectState.INIT, LoopConnectState.SERVER_SUCCESS,
-                                          LoopConnectState.CLIENT_SUCCESS]:
+                    if (
+                        key.data == "server"
+                        and (event & selectors.EVENT_READ)
+                        and connect_state
+                        in [
+                            LoopConnectState.INIT,
+                            LoopConnectState.SERVER_SUCCESS,
+                            LoopConnectState.CLIENT_SUCCESS,
+                        ]
+                    ):
                         sock, addr = server_sock.accept()
-                        if addr[0] == self._peer[0] and (connect_state != 1 or addr[1] == self._peer[1]):
+                        if addr[0] == self._peer[0] and (
+                            connect_state != 1 or addr[1] == self._peer[1]
+                        ):
                             sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
                             sock.setblocking(False)
                             if connect_state == LoopConnectState.INIT:
-                                self._sel.register(sock, selectors.EVENT_READ, data="peer")
+                                self._sel.register(
+                                    sock, selectors.EVENT_READ, data="peer"
+                                )
                                 peer_sock = sock
                                 connect_state = LoopConnectState.SERVER_SUCCESS
                             elif connect_state == LoopConnectState.SERVER_SUCCESS:
-                                self._sel.register(sock, selectors.EVENT_READ | selectors.EVENT_WRITE, data="pair")
+                                self._sel.register(
+                                    sock,
+                                    selectors.EVENT_READ | selectors.EVENT_WRITE,
+                                    data="pair",
+                                )
                                 self._sock = sock
                                 self._mode = "server"
                                 connect_state = LoopConnectState.READY
@@ -123,14 +145,29 @@ class LoopThread(threading.Thread):
                                 peer_sock.close()
                                 self._sel.unregister(peer_sock)
                             elif connect_state == LoopConnectState.CLIENT_SUCCESS:
-                                self._sel.register(sock, selectors.EVENT_READ, data="peer")
+                                self._sel.register(
+                                    sock, selectors.EVENT_READ, data="peer"
+                                )
                                 peer_sock = sock
                                 connect_state = LoopConnectState.BOTH_SUCCESS
-                    elif key.data == "client" and (event & selectors.EVENT_WRITE) \
-                            and connect_state in [LoopConnectState.INIT, LoopConnectState.SERVER_SUCCESS,
-                                          LoopConnectState.CLIENT_SUCCESS, LoopConnectState.READY]:
-                        if connect_state in [LoopConnectState.INIT, LoopConnectState.SERVER_SUCCESS]:
-                            err = client_sock.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR)
+                    elif (
+                        key.data == "client"
+                        and (event & selectors.EVENT_WRITE)
+                        and connect_state
+                        in [
+                            LoopConnectState.INIT,
+                            LoopConnectState.SERVER_SUCCESS,
+                            LoopConnectState.CLIENT_SUCCESS,
+                            LoopConnectState.READY,
+                        ]
+                    ):
+                        if connect_state in [
+                            LoopConnectState.INIT,
+                            LoopConnectState.SERVER_SUCCESS,
+                        ]:
+                            err = client_sock.getsockopt(
+                                socket.SOL_SOCKET, socket.SO_ERROR
+                            )
                             if err == 0:
                                 if connect_state == LoopConnectState.INIT:
                                     connect_state = LoopConnectState.CLIENT_SUCCESS
@@ -147,7 +184,9 @@ class LoopThread(threading.Thread):
                             server_sock.close()
                             self._sel.unregister(server_sock)
 
-                            sock = socket.socket(family=socket.AF_INET, type=socket.SOCK_STREAM)
+                            sock = socket.socket(
+                                family=socket.AF_INET, type=socket.SOCK_STREAM
+                            )
                             sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
                             sock.setblocking(False)
                             sock.bind(self._local)
@@ -161,8 +200,11 @@ class LoopThread(threading.Thread):
                             client_sock.sendall(str(ts).encode("utf-8"))
                             client_sock.close()
                             self._sel.unregister(client_sock)
-                    elif key.data == "peer" and (
-                            event & selectors.EVENT_READ) and connect_state == LoopConnectState.BOTH_SUCCESS:
+                    elif (
+                        key.data == "peer"
+                        and (event & selectors.EVENT_READ)
+                        and connect_state == LoopConnectState.BOTH_SUCCESS
+                    ):
                         data = peer_sock.recv()
                         peer_ts = int(data.decode("utf-8"))
                         if ts < peer_ts:
@@ -171,11 +213,18 @@ class LoopThread(threading.Thread):
                             connect_state = LoopConnectState.CLIENT_SUCCESS
                         key.fileobj.close()
                         self._sel.unregister(key.fileobj)
-                    elif key.data == "pair" and (
-                            event & selectors.EVENT_WRITE) and connect_state == LoopConnectState.CLIENT_SUCCESS:
+                    elif (
+                        key.data == "pair"
+                        and (event & selectors.EVENT_WRITE)
+                        and connect_state == LoopConnectState.CLIENT_SUCCESS
+                    ):
                         err = key.fileobj.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR)
                         if err == 0:
-                            self._sel.modify(key.fileobj, selectors.EVENT_READ | selectors.EVENT_WRITE, data="pair")
+                            self._sel.modify(
+                                key.fileobj,
+                                selectors.EVENT_READ | selectors.EVENT_WRITE,
+                                data="pair",
+                            )
                             self._sock = key.fileobj
                             self._mode = "client"
                             connect_state = LoopConnectState.READY
@@ -209,7 +258,11 @@ class LoopThread(threading.Thread):
                             _logger.debug(f"dispatch msg {msg}")
                         except IndexError:
                             pass
-                    if len(self._send_buffer) > 0 and key.data == "pair" and (event & selectors.EVENT_WRITE):
+                    if (
+                        len(self._send_buffer) > 0
+                        and key.data == "pair"
+                        and (event & selectors.EVENT_WRITE)
+                    ):
                         _logger.debug(f"send buffer: {self._send_buffer}")
                         words = []
                         pipes = []
