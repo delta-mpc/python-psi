@@ -117,14 +117,20 @@ class SocketPair(Pair):
 
     def _recv(self, count: int) -> bytes:
         buffer = bytearray(count)
-        view = memoryview(buffer)
+        #view = memoryview(buffer)
+        output = bytearray(count)
+        
+        cnt = 0
 
         while count > 0:
             n = self._sock.recv_into(buffer)
-            view = view[n:]
+            #view = view[n:]
+            output[cnt:cnt+n] = buffer[:n]
+            cnt += n
             count -= n
-
-        return bytes(buffer)
+            
+        return bytes(output)
+        #return bytes(buffer)
 
     def barrier(self):
         self.send(b"barrier")
