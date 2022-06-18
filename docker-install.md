@@ -21,10 +21,6 @@ result: "client_result.txt"
 安装包：
 psi.tar
 
-docker镜像：
-suning_psi.tar
-
-
 安装步骤：
 1、解压缩tar xvf psi.tar -C dockerpsi
 2、cd dockerpsi/psi/python-psi
@@ -64,16 +60,16 @@ COPY --from=builder /app/whls /app/whls
 RUN pip install --no-cache-dir whls/*.whl &&  rm -rf whls
 
 ENTRYPOINT [ "psi_run" ]
-4、docker build -f Dockerfile -t suning_psi:1.0.0 .
+4、docker build -f Dockerfile -t delta_psi:1.0.0 .
 生成镜像文件suning_psi:1.0.0
-5、docker save -o suning_psi.tar  suning_psi:1.0.0
-镜像保存到：suning_psi.tar
-并同步到对端scp suning_psi.tar fate@对端IP:/data
-6、在对端执行docker load < suning_psi.tar，加载镜像
+5、docker save -o delta_psi.tar  delta_psi:1.0.0
+镜像保存到：delta_psi.tar
+并同步到对端scp delta_psi.tar fate@对端IP:/data
+6、在对端执行docker load < delta_psi.tar，加载镜像
 
 7、执行命令
-docker run -p 10000:10000 -e PSI_CONFIG=config/docker.server.config.yaml -v /data/psi/python-psi/config:/app/config -v  /data/psi/python-psi/server_data.txt:/app/server_data.txt -t -i suning_psi:1.0.0 server 10.237.73.82:10000
-docker run -p 10000:10000 -e PSI_CONFIG=config/docker.client.config.yaml -v /data/python-psi/config:/app/config -v /data/python-psi/client_data.txt:/app/client_data.txt -t -i suning_psi:1.0.0 client 10.237.73.14:10000
+docker run -p 10000:10000 -e PSI_CONFIG=config/docker.server.config.yaml -v /data/psi/python-psi/config:/app/config -v  /data/psi/python-psi/server_data.txt:/app/server_data.txt -t -i delta_psi:1.0.0 server 10.237.73.82:10000
+docker run -p 10000:10000 -e PSI_CONFIG=config/docker.client.config.yaml -v /data/python-psi/config:/app/config -v /data/python-psi/client_data.txt:/app/client_data.txt -t -i delta_psi:1.0.0 client 10.237.73.14:10000
 
 8、docker和宿主机之间复制数据
 docker cp  /usr/local/python3/lib/python3.8/site-packages/psi/pair/socket/pair.py cff880d0f153:/usr/local/lib/python3.8/site-packages/psi/pair/socket/pair.py
