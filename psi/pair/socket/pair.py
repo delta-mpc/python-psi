@@ -120,7 +120,7 @@ class SocketPair(Pair):
         view = memoryview(buffer)
 
         while count > 0:
-            n = self._sock.recv_into(buffer)
+            n = self._sock.recv_into(view, count)
             view = view[n:]
             count -= n
 
